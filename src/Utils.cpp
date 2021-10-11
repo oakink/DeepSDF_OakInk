@@ -4,7 +4,8 @@
 
 #include <random>
 
-std::vector<Eigen::Vector3f> EquiDistPointsOnSphere(const uint numSamples, const float radius) {
+std::vector<Eigen::Vector3f> EquiDistPointsOnSphere(const uint numSamples,
+                                                    const float radius) {
   std::vector<Eigen::Vector3f> points(numSamples);
   const float offset = 2.f / numSamples;
 
@@ -25,7 +26,8 @@ std::vector<Eigen::Vector3f> EquiDistPointsOnSphere(const uint numSamples, const
   return points;
 }
 
-std::vector<Eigen::Vector4f> ValidPointsFromIm(const pangolin::Image<Eigen::Vector4f>& verts) {
+std::vector<Eigen::Vector4f> ValidPointsFromIm(
+    const pangolin::Image<Eigen::Vector4f>& verts) {
   std::vector<Eigen::Vector4f> points;
   Eigen::Vector4f v;
 
@@ -43,17 +45,14 @@ std::vector<Eigen::Vector4f> ValidPointsFromIm(const pangolin::Image<Eigen::Vect
 
 std::vector<Eigen::Vector4f> ValidPointsAndTrisFromIm(
     const pangolin::Image<Eigen::Vector4f>& pixNorms,
-    std::vector<Eigen::Vector4f>& tris,
-    int& totalObs,
-    int& wrongObs) {
+    std::vector<Eigen::Vector4f>& tris, int& totalObs, int& wrongObs) {
   std::vector<Eigen::Vector4f> points;
   Eigen::Vector4f n;
 
   for (unsigned int w = 0; w < pixNorms.w; w++) {
     for (unsigned int h = 0; h < pixNorms.h; h++) {
       n = pixNorms(w, h);
-      if (n[3] == 0.0f)
-        continue;
+      if (n[3] == 0.0f) continue;
       totalObs++;
       const std::size_t triInd = static_cast<std::size_t>(n[3] + 0.01f) - 1;
       Eigen::Vector4f triTrack = tris[triInd];
@@ -74,15 +73,16 @@ std::vector<Eigen::Vector4f> ValidPointsAndTrisFromIm(
   return points;
 }
 
-float TriangleArea(const Eigen::Vector3f& a, const Eigen::Vector3f& b, const Eigen::Vector3f& c) {
+float TriangleArea(const Eigen::Vector3f& a, const Eigen::Vector3f& b,
+                   const Eigen::Vector3f& c) {
   const Eigen::Vector3f ab = b - a;
   const Eigen::Vector3f ac = c - a;
 
   float costheta = ab.dot(ac) / (ab.norm() * ac.norm());
 
-  if (costheta < -1) // meaning theta is pi
+  if (costheta < -1)  // meaning theta is pi
     costheta = std::cos(static_cast<float>(M_PI) * 359.f / 360);
-  else if (costheta > 1) // meaning theta is zero
+  else if (costheta > 1)  // meaning theta is zero
     costheta = std::cos(static_cast<float>(M_PI) * 1.f / 360);
 
   const float sinTheta = std::sqrt(1 - costheta * costheta);
@@ -90,10 +90,9 @@ float TriangleArea(const Eigen::Vector3f& a, const Eigen::Vector3f& b, const Eig
   return 0.5f * ab.norm() * ac.norm() * sinTheta;
 }
 
-Eigen::Vector3f SamplePointFromTriangle(
-    const Eigen::Vector3f& a,
-    const Eigen::Vector3f& b,
-    const Eigen::Vector3f& c) {
+Eigen::Vector3f SamplePointFromTriangle(const Eigen::Vector3f& a,
+                                        const Eigen::Vector3f& b,
+                                        const Eigen::Vector3f& c) {
   std::random_device seeder;
   std::mt19937 generator(seeder());
   std::uniform_real_distribution<float> rand_dist(0.0, 1.0);
@@ -101,19 +100,18 @@ Eigen::Vector3f SamplePointFromTriangle(
   const float r1 = rand_dist(generator);
   const float r2 = rand_dist(generator);
 
-  return Eigen::Vector3f(
-      (1 - std::sqrt(r1)) * a + std::sqrt(r1) * (1 - r2) * b + r2 * std::sqrt(r1) * c);
+  return Eigen::Vector3f((1 - std::sqrt(r1)) * a +
+                         std::sqrt(r1) * (1 - r2) * b + r2 * std::sqrt(r1) * c);
 }
 
 // TODO: duplicated w/ below
 std::pair<Eigen::Vector3f, float> ComputeNormalizationParameters(
-    pangolin::Geometry& geom,
-    const float buffer) {
-  float xMin = 1000000, xMax = -1000000, yMin = 1000000, yMax = -1000000, zMin = 1000000,
-        zMax = -1000000;
+    pangolin::Geometry& geom, const float buffer) {
+  float xMin = 1000000, xMax = -1000000, yMin = 1000000, yMax = -1000000,
+        zMin = 1000000, zMax = -1000000;
 
-  pangolin::Image<float> vertices =
-      pangolin::get<pangolin::Image<float>>(geom.buffers["geometry"].attributes["vertex"]);
+  pangolin::Image<float> vertices = pangolin::get<pangolin::Image<float>>(
+      geom.buffers["geometry"].attributes["vertex"]);
 
   const std::size_t numVertices = vertices.h;
 
@@ -138,8 +136,7 @@ std::pair<Eigen::Vector3f, float> ComputeNormalizationParameters(
   // compute min max in each dimension
   for (size_t i = 0; i < numVertices; i++) {
     // pass when it's not used.
-    if (verticesUsed[i] == 0)
-      continue;
+    if (verticesUsed[i] == 0) continue;
     xMin = fmin(xMin, vertices(0, i));
     yMin = fmin(yMin, vertices(1, i));
     zMin = fmin(zMin, vertices(2, i));
@@ -148,16 +145,17 @@ std::pair<Eigen::Vector3f, float> ComputeNormalizationParameters(
     zMax = fmax(zMax, vertices(2, i));
   }
 
-  const Eigen::Vector3f center((xMax + xMin) / 2.0f, (yMax + yMin) / 2.0f, (zMax + zMin) / 2.0f);
+  const Eigen::Vector3f center((xMax + xMin) / 2.0f, (yMax + yMin) / 2.0f,
+                               (zMax + zMin) / 2.0f);
 
   // make the mean zero
   float maxDistance = -1.0f;
   for (size_t i = 0; i < numVertices; i++) {
     // pass when it's not used.
-    if (verticesUsed[i] == false)
-      continue;
+    if (verticesUsed[i] == false) continue;
 
-    const float dist = (Eigen::Map<Eigen::Vector3f>(vertices.RowPtr(i)) - center).norm();
+    const float dist =
+        (Eigen::Map<Eigen::Vector3f>(vertices.RowPtr(i)) - center).norm();
     maxDistance = std::max(maxDistance, dist);
   }
 
@@ -167,15 +165,13 @@ std::pair<Eigen::Vector3f, float> ComputeNormalizationParameters(
   return {-1 * center, (1.f / maxDistance)};
 }
 
-float BoundingCubeNormalization(
-    pangolin::Geometry& geom,
-    bool fitToUnitSphere,
-    const float buffer) {
-  float xMin = 1000000, xMax = -1000000, yMin = 1000000, yMax = -1000000, zMin = 1000000,
-        zMax = -1000000;
+float BoundingCubeNormalization(pangolin::Geometry& geom, bool fitToUnitSphere,
+                                const float buffer) {
+  float xMin = 1000000, xMax = -1000000, yMin = 1000000, yMax = -1000000,
+        zMin = 1000000, zMax = -1000000;
 
-  pangolin::Image<float> vertices =
-      pangolin::get<pangolin::Image<float>>(geom.buffers["geometry"].attributes["vertex"]);
+  pangolin::Image<float> vertices = pangolin::get<pangolin::Image<float>>(
+      geom.buffers["geometry"].attributes["vertex"]);
 
   const std::size_t numVertices = vertices.h;
 
@@ -200,8 +196,7 @@ float BoundingCubeNormalization(
   // compute min max in each dimension
   for (size_t i = 0; i < numVertices; i++) {
     // pass when it's not used.
-    if (verticesUsed[i] == 0)
-      continue;
+    if (verticesUsed[i] == 0) continue;
     xMin = fmin(xMin, vertices(0, i));
     yMin = fmin(yMin, vertices(1, i));
     zMin = fmin(zMin, vertices(2, i));
@@ -218,8 +213,7 @@ float BoundingCubeNormalization(
   float maxDistance = -1.0f;
   for (size_t i = 0; i < numVertices; i++) {
     // pass when it's not used.
-    if (verticesUsed[i] == false)
-      continue;
+    if (verticesUsed[i] == false) continue;
     vertices(0, i) -= xCenter;
     vertices(1, i) -= yCenter;
     vertices(2, i) -= zCenter;
