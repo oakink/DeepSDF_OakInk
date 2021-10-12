@@ -170,10 +170,14 @@ cd [...]/DeepSdf
 mkdir data
 
 # pre-process the sofas training set (SDF samples)
-python preprocess_data.py --data_dir data --source [...]/ShapeNetCore.v2/ --name ShapeNetV2 --split examples/splits/sv2_sofas_train.json --skip
+
+export MESA_GL_VERSION_OVERRIDE=3.3
+export PANGOLIN_WINDOW_URI=headless://
+
+python preprocess_data.py --data_dir data/sdf/mug --skip --threads 16
 
 # train the model
-python train_deep_sdf.py -e examples/sofas
+python train_deep_sdf.py -e data/sdf/mug
 
 # pre-process the sofa test set (SDF samples)
 python preprocess_data.py --data_dir data --source [...]/ShapeNetCore.v2/ --name ShapeNetV2 --split examples/splits/sv2_sofas_test.json --test --skip

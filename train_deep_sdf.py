@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 # Copyright 2004-present Facebook. All Rights Reserved.
 
-import torch
-import torch.utils.data as data_utils
-import signal
-import sys
-import os
+import json
 import logging
 import math
-import json
+import os
+import signal
+import sys
 import time
+
+import torch
+import torch.utils.data as data_utils
 
 import deep_sdf
 import deep_sdf.workspace as ws
@@ -79,11 +80,7 @@ def get_learning_rate_schedules(specs):
             schedules.append(ConstantLearningRateSchedule(schedule_specs["Value"]))
 
         else:
-            raise Exception(
-                'no known learning rate schedule of type "{}"'.format(
-                    schedule_specs["Type"]
-                )
-            )
+            raise Exception('no known learning rate schedule of type "{}"'.format(schedule_specs["Type"]))
 
     return schedules
 
@@ -110,14 +107,10 @@ def save_optimizer(experiment_directory, filename, optimizer, epoch):
 
 def load_optimizer(experiment_directory, filename, optimizer):
 
-    full_filename = os.path.join(
-        ws.get_optimizer_params_dir(experiment_directory), filename
-    )
+    full_filename = os.path.join(ws.get_optimizer_params_dir(experiment_directory), filename)
 
     if not os.path.isfile(full_filename):
-        raise Exception(
-            'optimizer state dict "{}" does not exist'.format(full_filename)
-        )
+        raise Exception('optimizer state dict "{}" does not exist'.format(full_filename))
 
     data = torch.load(full_filename)
 
@@ -141,9 +134,7 @@ def save_latent_vectors(experiment_directory, filename, latent_vec, epoch):
 # TODO: duplicated in workspace
 def load_latent_vectors(experiment_directory, filename, lat_vecs):
 
-    full_filename = os.path.join(
-        ws.get_latent_codes_dir(experiment_directory), filename
-    )
+    full_filename = os.path.join(ws.get_latent_codes_dir(experiment_directory), filename)
 
     if not os.path.isfile(full_filename):
         raise Exception('latent state file "{}" does not exist'.format(full_filename))
@@ -155,9 +146,7 @@ def load_latent_vectors(experiment_directory, filename, lat_vecs):
         # for backwards compatibility
         if not lat_vecs.num_embeddings == data["latent_codes"].size()[0]:
             raise Exception(
-                "num latent codes mismatched: {} vs {}".format(
-                    lat_vecs.num_embeddings, data["latent_codes"].size()[0]
-                )
+                "num latent codes mismatched: {} vs {}".format(lat_vecs.num_embeddings, data["latent_codes"].size()[0])
             )
 
         if not lat_vecs.embedding_dim == data["latent_codes"].size()[2]:
@@ -253,11 +242,14 @@ def main_function(experiment_directory, continue_from, batch_split):
     logging.debug("running " + experiment_directory)
 
     specs = ws.load_experiment_specifications(experiment_directory)
+    data_source = experiment_directory
+    train_split_file = specs["TrainSplit"]
+
+    experiment_directory = os.path.join(experiment_directory, "network")
+    if not os.path.isdir(experiment_directory):
+        os.makedirs(experiment_directory)
 
     logging.info("Experiment description: \n" + specs["Description"])
-
-    data_source = specs["DataSource"]
-    train_split_file = specs["TrainSplit"]
 
     arch = __import__("networks." + specs["NetworkArch"], fromlist=["Decoder"])
 
@@ -339,9 +331,7 @@ def main_function(experiment_directory, continue_from, batch_split):
     with open(train_split_file, "r") as f:
         train_split = json.load(f)
 
-    sdf_dataset = deep_sdf.data.SDFSamples(
-        data_source, train_split, num_samp_per_scene, load_ram=False
-    )
+    sdf_dataset = deep_sdf.data.SDFSamples(data_source, train_split, num_samp_per_scene, load_ram=False)
 
     num_data_loader_threads = get_spec_with_default(specs, "DataLoaderThreads", 1)
     logging.debug("loading data with {} threads".format(num_data_loader_threads))
@@ -351,7 +341,7 @@ def main_function(experiment_directory, continue_from, batch_split):
         batch_size=scene_per_batch,
         shuffle=True,
         num_workers=num_data_loader_threads,
-        drop_last=True,
+        drop_last=False,
     )
 
     logging.debug("torch num_threads: {}".format(torch.get_num_threads()))
@@ -369,11 +359,7 @@ def main_function(experiment_directory, continue_from, batch_split):
         get_spec_with_default(specs, "CodeInitStdDev", 1.0) / math.sqrt(latent_size),
     )
 
-    logging.debug(
-        "initialized with mean magnitude {}".format(
-            get_mean_latent_vector_magnitude(lat_vecs)
-        )
-    )
+    logging.debug("initialized with mean magnitude {}".format(get_mean_latent_vector_magnitude(lat_vecs)))
 
     loss_l1 = torch.nn.L1Loss(reduction="sum")
 
@@ -402,21 +388,13 @@ def main_function(experiment_directory, continue_from, batch_split):
 
         logging.info('continuing from "{}"'.format(continue_from))
 
-        lat_epoch = load_latent_vectors(
-            experiment_directory, continue_from + ".pth", lat_vecs
-        )
+        lat_epoch = load_latent_vectors(experiment_directory, continue_from + ".pth", lat_vecs)
 
-        model_epoch = ws.load_model_parameters(
-            experiment_directory, continue_from, decoder
-        )
+        model_epoch = ws.load_model_parameters(experiment_directory, continue_from, decoder)
 
-        optimizer_epoch = load_optimizer(
-            experiment_directory, continue_from + ".pth", optimizer_all
-        )
+        optimizer_epoch = load_optimizer(experiment_directory, continue_from + ".pth", optimizer_all)
 
-        loss_log, lr_log, timing_log, lat_mag_log, param_mag_log, log_epoch = load_logs(
-            experiment_directory
-        )
+        loss_log, lr_log, timing_log, lat_mag_log, param_mag_log, log_epoch = load_logs(experiment_directory)
 
         if not log_epoch == model_epoch:
             loss_log, lr_log, timing_log, lat_mag_log, param_mag_log = clip_logs(
@@ -425,9 +403,7 @@ def main_function(experiment_directory, continue_from, batch_split):
 
         if not (model_epoch == optimizer_epoch and model_epoch == lat_epoch):
             raise RuntimeError(
-                "epoch mismatch: {} vs {} vs {} vs {}".format(
-                    model_epoch, optimizer_epoch, lat_epoch, log_epoch
-                )
+                "epoch mismatch: {} vs {} vs {} vs {}".format(model_epoch, optimizer_epoch, lat_epoch, log_epoch)
             )
 
         start_epoch = model_epoch + 1
@@ -436,11 +412,7 @@ def main_function(experiment_directory, continue_from, batch_split):
 
     logging.info("starting from epoch {}".format(start_epoch))
 
-    logging.info(
-        "Number of decoder parameters: {}".format(
-            sum(p.data.nelement() for p in decoder.parameters())
-        )
-    )
+    logging.info("Number of decoder parameters: {}".format(sum(p.data.nelement() for p in decoder.parameters())))
     logging.info(
         "Number of shape code parameters: {} (# codes {}, code dim {})".format(
             lat_vecs.num_embeddings * lat_vecs.embedding_dim,
@@ -453,13 +425,13 @@ def main_function(experiment_directory, continue_from, batch_split):
 
         start = time.time()
 
-        logging.info("epoch {}...".format(epoch))
-
         decoder.train()
 
         adjust_learning_rate(lr_schedules, optimizer_all, epoch)
 
-        for sdf_data, indices in sdf_loader:
+        bar = deep_sdf.etqdm(sdf_loader)
+
+        for sdf_data, indices in bar:
 
             # Process the input data
             sdf_data = sdf_data.reshape(-1, 4)
@@ -502,9 +474,7 @@ def main_function(experiment_directory, continue_from, batch_split):
 
                 if do_code_regularization:
                     l2_size_loss = torch.sum(torch.norm(batch_vecs, dim=1))
-                    reg_loss = (
-                        code_reg_lambda * min(1, epoch / 100) * l2_size_loss
-                    ) / num_sdf_samples
+                    reg_loss = (code_reg_lambda * min(1, epoch / 100) * l2_size_loss) / num_sdf_samples
 
                     chunk_loss = chunk_loss + reg_loss.cuda()
 
@@ -512,7 +482,7 @@ def main_function(experiment_directory, continue_from, batch_split):
 
                 batch_loss += chunk_loss.item()
 
-            logging.debug("loss = {}".format(batch_loss))
+            bar.set_description(f"Epoch: {epoch} loss = {batch_loss:.5f}")
 
             loss_log.append(batch_loss)
 

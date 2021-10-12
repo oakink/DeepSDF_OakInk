@@ -2,7 +2,11 @@
 # Copyright 2004-present Facebook. All Rights Reserved.
 
 import logging
+from types import MethodType
+from typing import Optional
+
 import torch
+from tqdm import tqdm
 
 
 def add_common_args(arg_parser):
@@ -60,3 +64,16 @@ def decode_sdf(decoder, latent_vector, queries):
     sdf = decoder(inputs)
 
     return sdf
+
+
+def set_description(self, _: str):
+    # if rank != 0, output nothing!
+    pass
+
+
+def etqdm(iterable, rank: Optional[int] = None, **kwargs):
+    if rank:
+        iterable.set_description = MethodType(set_description, iterable)
+        return iterable
+    else:
+        return tqdm(iterable, bar_format="{l_bar}{bar:3}{r_bar}", colour="#ffa500", **kwargs)

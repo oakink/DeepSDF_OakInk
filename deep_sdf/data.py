@@ -3,9 +3,10 @@
 
 import glob
 import logging
-import numpy as np
 import os
 import random
+
+import numpy as np
 import torch
 import torch.utils.data
 
@@ -14,22 +15,18 @@ import deep_sdf.workspace as ws
 
 def get_instance_filenames(data_source, split):
     npzfiles = []
-    for dataset in split:
-        for class_name in split[dataset]:
-            for instance_name in split[dataset][class_name]:
-                instance_filename = os.path.join(
-                    dataset, class_name, instance_name + ".npz"
-                )
-                if not os.path.isfile(
-                    os.path.join(data_source, ws.sdf_samples_subdir, instance_filename)
-                ):
-                    # raise RuntimeError(
-                    #     'Requested non-existent file "' + instance_filename + "'"
-                    # )
-                    logging.warning(
-                        "Requested non-existent file '{}'".format(instance_filename)
-                    )
-                npzfiles += [instance_filename]
+    for sid in split:
+        obj_ids = {}
+        if "real" in split[sid]:
+            obj_ids.update({oid: True for oid in split[sid]["real"]})
+        if "virtual" in split[sid]:
+            obj_ids.update({oid: False for oid in split[sid]["virtual"]})
+
+        for oid, is_real in obj_ids.items():
+            instance_filename = os.path.join(oid + ".npz")
+            if not os.path.isfile(os.path.join(data_source, ws.sdf_samples_subdir, instance_filename)):
+                raise RuntimeError('Requested non-existent file "' + instance_filename + "'")
+            npzfiles += [instance_filename]
     return npzfiles
 
 
@@ -40,15 +37,13 @@ class NoMeshFileError(RuntimeError):
 
 
 class MultipleMeshFileError(RuntimeError):
-    """"Raised when a there a multiple mesh files in a shape directory"""
+    """ "Raised when a there a multiple mesh files in a shape directory"""
 
     pass
 
 
 def find_mesh_in_directory(shape_dir):
-    mesh_filenames = list(glob.iglob(shape_dir + "/**/*.obj")) + list(
-        glob.iglob(shape_dir + "/*.obj")
-    )
+    mesh_filenames = list(glob.iglob(shape_dir + "/**/*.obj")) + list(glob.iglob(shape_dir + "/*.obj"))
     if len(mesh_filenames) == 0:
         raise NoMeshFileError()
     elif len(mesh_filenames) > 1:
@@ -132,12 +127,7 @@ class SDFSamples(torch.utils.data.Dataset):
         self.data_source = data_source
         self.npyfiles = get_instance_filenames(data_source, split)
 
-        logging.debug(
-            "using "
-            + str(len(self.npyfiles))
-            + " shapes from data source "
-            + data_source
-        )
+        logging.info("using " + str(len(self.npyfiles)) + " shapes from data source " + data_source)
 
         self.load_ram = load_ram
 
@@ -159,9 +149,7 @@ class SDFSamples(torch.utils.data.Dataset):
         return len(self.npyfiles)
 
     def __getitem__(self, idx):
-        filename = os.path.join(
-            self.data_source, ws.sdf_samples_subdir, self.npyfiles[idx]
-        )
+        filename = os.path.join(self.data_source, ws.sdf_samples_subdir, self.npyfiles[idx])
         if self.load_ram:
             return (
                 unpack_sdf_samples_from_ram(self.loaded_data[idx], self.subsample),

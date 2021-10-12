@@ -18,9 +18,7 @@ def filter_classes_glob(patterns, classes):
     passed_classes = set()
     for pattern in patterns:
 
-        passed_classes = passed_classes.union(
-            set(filter(lambda x: fnmatch.fnmatch(x, pattern), classes))
-        )
+        passed_classes = passed_classes.union(set(filter(lambda x: fnmatch.fnmatch(x, pattern), classes)))
 
     return list(passed_classes)
 
@@ -67,9 +65,7 @@ def append_data_source_map(data_dir, name, source):
 
     if name in data_source_map:
         if not data_source_map[name] == os.path.abspath(source):
-            raise RuntimeError(
-                "Cannot add data with the same name and a different source."
-            )
+            raise RuntimeError("Cannot add data with the same name and a different source.")
 
     else:
         data_source_map[name] = os.path.abspath(source)
@@ -82,8 +78,7 @@ if __name__ == "__main__":
 
     arg_parser = argparse.ArgumentParser(
         formatter_class=argparse.RawTextHelpFormatter,
-        description="Pre-processes data from a data source and append the results to "
-        + "a dataset.",
+        description="Pre-processes data from a data source and append the results to " + "a dataset.",
     )
     arg_parser.add_argument(
         "--data_dir",
@@ -91,27 +86,6 @@ if __name__ == "__main__":
         dest="data_dir",
         required=True,
         help="The directory which holds all preprocessed data.",
-    )
-    arg_parser.add_argument(
-        "--source",
-        "-s",
-        dest="source_dir",
-        required=True,
-        help="The directory which holds the data to preprocess and append.",
-    )
-    arg_parser.add_argument(
-        "--name",
-        "-n",
-        dest="source_name",
-        default=None,
-        help="The name to use for the data source. If unspecified, it defaults to the "
-        + "directory name.",
-    )
-    arg_parser.add_argument(
-        "--split",
-        dest="split_filename",
-        required=True,
-        help="A split filename defining the shapes to be processed.",
     )
     arg_parser.add_argument(
         "--skip",
@@ -164,55 +138,42 @@ if __name__ == "__main__":
         if args.test_sampling:
             additional_general_args += ["-t"]
 
-    with open(args.split_filename, "r") as f:
+    with open(os.path.join(args.data_dir, "split.json"), "r") as f:
         split = json.load(f)
 
-    if args.source_name is None:
-        args.source_name = os.path.basename(os.path.normpath(args.source_dir))
+    dest_dir = os.path.join(args.data_dir, subdir)
 
-    dest_dir = os.path.join(args.data_dir, subdir, args.source_name)
-
-    logging.info(
-        "Preprocessing data from "
-        + args.source_dir
-        + " and placing the results in "
-        + dest_dir
-    )
+    logging.info("Placing the results in " + dest_dir)
 
     if not os.path.isdir(dest_dir):
         os.makedirs(dest_dir)
 
     if args.surface_sampling:
-        normalization_param_dir = os.path.join(
-            args.data_dir, ws.normalization_param_subdir, args.source_name
-        )
+        normalization_param_dir = os.path.join(args.data_dir, ws.normalization_param_subdir)
         if not os.path.isdir(normalization_param_dir):
             os.makedirs(normalization_param_dir)
 
-    append_data_source_map(args.data_dir, args.source_name, args.source_dir)
-
-    class_directories = split[args.source_name]
+    real_meta = json.load(open("./data/meta/object_id.json", "r"))
+    virtual_meta = json.load(open("./data/meta/virtual_object_id.json", "r"))
+    species_ids = dict(split).keys()
 
     meshes_targets_and_specific_args = []
 
-    for class_dir in class_directories:
-        class_path = os.path.join(args.source_dir, class_dir)
-        instance_dirs = class_directories[class_dir]
+    for sid in species_ids:
+        obj_ids = {}
+        if "real" in split[sid]:
+            obj_ids.update({oid: True for oid in split[sid]["real"]})
+        if "virtual" in split[sid]:
+            obj_ids.update({oid: False for oid in split[sid]["virtual"]})
 
-        logging.debug(
-            "Processing " + str(len(instance_dirs)) + " instances of class " + class_dir
-        )
+        for oid, is_real in obj_ids.items():
 
-        target_dir = os.path.join(dest_dir, class_dir)
+            obj_name = real_meta[oid]["name"] if is_real else virtual_meta[oid]["name"]
 
-        if not os.path.isdir(target_dir):
-            os.mkdir(target_dir)
+            shape_dir = os.path.join("./data", "yodaObjects" if is_real else "yodaVirtualObjects", obj_name, "align")
 
-        for instance_dir in instance_dirs:
+            processed_filepath = os.path.join(dest_dir, oid + extension)
 
-            shape_dir = os.path.join(class_path, instance_dir)
-
-            processed_filepath = os.path.join(target_dir, instance_dir + extension)
             if args.skip and os.path.isfile(processed_filepath):
                 logging.debug("skipping " + processed_filepath)
                 continue
@@ -223,34 +184,26 @@ if __name__ == "__main__":
                 specific_args = []
 
                 if args.surface_sampling:
-                    normalization_param_target_dir = os.path.join(
-                        normalization_param_dir, class_dir
-                    )
 
-                    if not os.path.isdir(normalization_param_target_dir):
-                        os.mkdir(normalization_param_target_dir)
-
-                    normalization_param_filename = os.path.join(
-                        normalization_param_target_dir, instance_dir + ".npz"
-                    )
+                    normalization_param_filename = os.path.join(normalization_param_dir, oid + ".npz")
                     specific_args = ["-n", normalization_param_filename]
 
                 meshes_targets_and_specific_args.append(
                     (
-                        os.path.join(shape_dir, mesh_filename),
+                        mesh_filename,
                         processed_filepath,
                         specific_args,
                     )
                 )
 
             except deep_sdf.data.NoMeshFileError:
-                logging.warning("No mesh found for instance " + instance_dir)
+                logging.warning("No mesh found for instance " + shape_dir)
             except deep_sdf.data.MultipleMeshFileError:
-                logging.warning("Multiple meshes found for instance " + instance_dir)
+                logging.warning("Multiple meshes found for instance " + shape_dir)
 
-    with concurrent.futures.ThreadPoolExecutor(
-        max_workers=int(args.num_threads)
-    ) as executor:
+    print(meshes_targets_and_specific_args)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=int(args.num_threads)) as executor:
 
         for (
             mesh_filepath,
