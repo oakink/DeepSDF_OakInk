@@ -24,9 +24,7 @@ def reconstruct(
     lr=5e-4,
     l2reg=False,
 ):
-    def adjust_learning_rate(
-        initial_lr, optimizer, num_iterations, decreased_by, adjust_lr_every
-    ):
+    def adjust_learning_rate(initial_lr, optimizer, num_iterations, decreased_by, adjust_lr_every):
         lr = initial_lr * ((1 / decreased_by) ** (num_iterations // adjust_lr_every))
         for param_group in optimizer.param_groups:
             param_group["lr"] = lr
@@ -49,9 +47,7 @@ def reconstruct(
     for e in range(num_iterations):
 
         decoder.eval()
-        sdf_data = deep_sdf.data.unpack_sdf_samples_from_ram(
-            test_sdf, num_samples
-        ).cuda()
+        sdf_data = deep_sdf.data.unpack_sdf_samples_from_ram(test_sdf, num_samples).cuda()
         xyz = sdf_data[:, 0:3]
         sdf_gt = sdf_data[:, 3].unsqueeze(1)
 
@@ -91,8 +87,7 @@ def reconstruct(
 if __name__ == "__main__":
 
     arg_parser = argparse.ArgumentParser(
-        description="Use a trained DeepSDF decoder to reconstruct a shape given SDF "
-        + "samples."
+        description="Use a trained DeepSDF decoder to reconstruct a shape given SDF " + "samples."
     )
     arg_parser.add_argument(
         "--experiment",
@@ -109,20 +104,6 @@ if __name__ == "__main__":
         default="latest",
         help="The checkpoint weights to use. This can be a number indicated an epoch "
         + "or 'latest' for the latest weights (this is the default)",
-    )
-    arg_parser.add_argument(
-        "--data",
-        "-d",
-        dest="data_source",
-        required=True,
-        help="The data source directory.",
-    )
-    arg_parser.add_argument(
-        "--split",
-        "-s",
-        dest="split_filename",
-        required=True,
-        help="The split to reconstruct.",
     )
     arg_parser.add_argument(
         "--iters",
@@ -150,14 +131,7 @@ if __name__ == "__main__":
         var = torch.var(lat_mat, 0)
         return mean, var
 
-    specs_filename = os.path.join(args.experiment_directory, "specs.json")
-
-    if not os.path.isfile(specs_filename):
-        raise Exception(
-            'The experiment directory does not include specifications file "specs.json"'
-        )
-
-    specs = json.load(open(specs_filename))
+    specs = ws.load_experiment_specifications(args.experiment_directory)
 
     arch = __import__("networks." + specs["NetworkArch"], fromlist=["Decoder"])
 
@@ -168,9 +142,7 @@ if __name__ == "__main__":
     decoder = torch.nn.DataParallel(decoder)
 
     saved_model_state = torch.load(
-        os.path.join(
-            args.experiment_directory, ws.model_params_subdir, args.checkpoint + ".pth"
-        )
+        os.path.join(args.experiment_directory, "network", ws.model_params_subdir, args.checkpoint + ".pth")
     )
     saved_model_epoch = saved_model_state["epoch"]
 
@@ -178,10 +150,10 @@ if __name__ == "__main__":
 
     decoder = decoder.module.cuda()
 
-    with open(args.split_filename, "r") as f:
+    with open(os.path.join(args.experiment_directory, "split.json"), "r") as f:
         split = json.load(f)
 
-    npz_filenames = deep_sdf.data.get_instance_filenames(args.data_source, split)
+    npz_filenames = deep_sdf.data.get_instance_filenames(args.experiment_directory, split)
 
     random.shuffle(npz_filenames)
 
@@ -192,22 +164,16 @@ if __name__ == "__main__":
     save_latvec_only = False
     rerun = 0
 
-    reconstruction_dir = os.path.join(
-        args.experiment_directory, ws.reconstructions_subdir, str(saved_model_epoch)
-    )
+    reconstruction_dir = os.path.join(args.experiment_directory, ws.reconstructions_subdir)
 
     if not os.path.isdir(reconstruction_dir):
         os.makedirs(reconstruction_dir)
 
-    reconstruction_meshes_dir = os.path.join(
-        reconstruction_dir, ws.reconstruction_meshes_subdir
-    )
+    reconstruction_meshes_dir = os.path.join(reconstruction_dir, ws.reconstruction_meshes_subdir)
     if not os.path.isdir(reconstruction_meshes_dir):
         os.makedirs(reconstruction_meshes_dir)
 
-    reconstruction_codes_dir = os.path.join(
-        reconstruction_dir, ws.reconstruction_codes_subdir
-    )
+    reconstruction_codes_dir = os.path.join(reconstruction_dir, ws.reconstruction_codes_subdir)
     if not os.path.isdir(reconstruction_codes_dir):
         os.makedirs(reconstruction_codes_dir)
 
@@ -216,7 +182,7 @@ if __name__ == "__main__":
         if "npz" not in npz:
             continue
 
-        full_filename = os.path.join(args.data_source, ws.sdf_samples_subdir, npz)
+        full_filename = os.path.join(args.experiment_directory, ws.sdf_samples_subdir, npz)
 
         logging.debug("loading {}".format(npz))
 
@@ -225,23 +191,13 @@ if __name__ == "__main__":
         for k in range(repeat):
 
             if rerun > 1:
-                mesh_filename = os.path.join(
-                    reconstruction_meshes_dir, npz[:-4] + "-" + str(k + rerun)
-                )
-                latent_filename = os.path.join(
-                    reconstruction_codes_dir, npz[:-4] + "-" + str(k + rerun) + ".pth"
-                )
+                mesh_filename = os.path.join(reconstruction_meshes_dir, npz[:-4] + "-" + str(k + rerun))
+                latent_filename = os.path.join(reconstruction_codes_dir, npz[:-4] + "-" + str(k + rerun) + ".pth")
             else:
                 mesh_filename = os.path.join(reconstruction_meshes_dir, npz[:-4])
-                latent_filename = os.path.join(
-                    reconstruction_codes_dir, npz[:-4] + ".pth"
-                )
+                latent_filename = os.path.join(reconstruction_codes_dir, npz[:-4] + ".pth")
 
-            if (
-                args.skip
-                and os.path.isfile(mesh_filename + ".ply")
-                and os.path.isfile(latent_filename)
-            ):
+            if args.skip and os.path.isfile(mesh_filename + ".ply") and os.path.isfile(latent_filename):
                 continue
 
             logging.info("reconstructing {}".format(npz))
@@ -276,9 +232,7 @@ if __name__ == "__main__":
             if not save_latvec_only:
                 start = time.time()
                 with torch.no_grad():
-                    deep_sdf.mesh.create_mesh(
-                        decoder, latent, mesh_filename, N=256, max_batch=int(2 ** 18)
-                    )
+                    deep_sdf.mesh.create_mesh(decoder, latent, mesh_filename, N=256, max_batch=int(2 ** 18))
                 logging.debug("total time: {}".format(time.time() - start))
 
             if not os.path.exists(os.path.dirname(latent_filename)):
