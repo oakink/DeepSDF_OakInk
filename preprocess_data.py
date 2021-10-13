@@ -6,10 +6,52 @@ import concurrent.futures
 import json
 import logging
 import os
+import pickle
+import shutil
 import subprocess
+
+import numpy as np
+import trimesh
 
 import deep_sdf
 import deep_sdf.workspace as ws
+
+
+def as_mesh(scene_or_mesh):
+    if isinstance(scene_or_mesh, trimesh.Scene):
+        assert len(scene_or_mesh.geometry) != 0
+        mesh = trimesh.util.concatenate(
+            tuple(trimesh.Trimesh(vertices=g.vertices, faces=g.faces) for g in scene_or_mesh.geometry.values())
+        )
+    else:
+        assert isinstance(scene_or_mesh, trimesh.Trimesh)
+        mesh = scene_or_mesh
+    return mesh
+
+
+def resize_objs(meshes_targets_and_specific_args, scale, work_path):
+    max_norm = 0
+    for (mesh_filepath, _, _, _) in meshes_targets_and_specific_args:
+        mesh = as_mesh(trimesh.load(mesh_filepath, process=False))
+        verts = np.asfarray(mesh.vertices, dtype=np.float32)
+        norm = np.linalg.norm(np.max(verts, axis=0) - np.min(verts, axis=0))
+        max_norm = max(max_norm, norm)
+    pickle.dump({"max_norm": max_norm, "scale": scale}, open(os.path.join(work_path, "rescale.pkl"), "wb"))
+
+    max_norm = max_norm * scale
+    for (mesh_filepath, resize_mesh, _, _) in meshes_targets_and_specific_args:
+        outmtl = os.path.splitext(resize_mesh)[0] + ".mtl"
+        with open(mesh_filepath, "r") as f, open(resize_mesh, "w") as fo:
+            for line in f:
+                if line.startswith("v "):
+                    v = np.fromstring(line[2:], sep=" ")[:, None]  # [3, 1]
+                    vNormString = "v %f %f %f\n" % (v[0], v[1], v[2])
+                    fo.write(vNormString)
+                elif line.startswith("mtllib "):
+                    fo.write("mtllib " + os.path.basename(outmtl) + "\n")
+                else:
+                    fo.write(line)
+        shutil.copy2(os.path.splitext(mesh_filepath)[0] + ".mtl", outmtl)
 
 
 def filter_classes_glob(patterns, classes):
@@ -100,6 +142,7 @@ if __name__ == "__main__":
         default=8,
         help="The number of threads to use to process the data.",
     )
+    arg_parser.add_argument("--scale", "-s", default=1.0, help="The max size scale of the category.")
     arg_parser.add_argument(
         "--test",
         "-t",
@@ -188,9 +231,19 @@ if __name__ == "__main__":
                     normalization_param_filename = os.path.join(normalization_param_dir, oid + ".npz")
                     specific_args = ["-n", normalization_param_filename]
 
+                resize_mesh_path, resize_mesh_subpath, resize_mesh_name = (
+                    os.path.split(processed_filepath)[0],
+                    os.path.split(processed_filepath)[1][:-4],
+                    os.path.split(mesh_filename)[1],
+                )
+                resize_mesh_path = os.path.join(resize_mesh_path + "_resize", resize_mesh_subpath)
+                if not os.path.exists(resize_mesh_path):
+                    os.makedirs(resize_mesh_path, exist_ok=True)
+
                 meshes_targets_and_specific_args.append(
                     (
                         mesh_filename,
+                        os.path.join(resize_mesh_path, resize_mesh_name),
                         processed_filepath,
                         specific_args,
                     )
@@ -202,17 +255,19 @@ if __name__ == "__main__":
                 logging.warning("Multiple meshes found for instance " + shape_dir)
 
     print(meshes_targets_and_specific_args)
+    resize_objs(meshes_targets_and_specific_args, scale=args.scale, work_path=args.data_dir)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=int(args.num_threads)) as executor:
 
         for (
-            mesh_filepath,
+            _,
+            resize_mesh,
             target_filepath,
             specific_args,
         ) in meshes_targets_and_specific_args:
             executor.submit(
                 process_mesh,
-                mesh_filepath,
+                resize_mesh,
                 target_filepath,
                 executable,
                 specific_args + additional_general_args,

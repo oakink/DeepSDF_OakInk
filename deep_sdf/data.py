@@ -47,7 +47,9 @@ def find_mesh_in_directory(shape_dir):
     if len(mesh_filenames) == 0:
         raise NoMeshFileError()
     elif len(mesh_filenames) > 1:
-        raise MultipleMeshFileError()
+        mesh_filenames = [name for name in mesh_filenames if "norm" in name]
+        if len(mesh_filenames) > 1:
+            raise MultipleMeshFileError()
     return mesh_filenames[0]
 
 
