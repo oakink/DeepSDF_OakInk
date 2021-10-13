@@ -45,6 +45,7 @@ def resize_objs(meshes_targets_and_specific_args, scale, work_path):
             for line in f:
                 if line.startswith("v "):
                     v = np.fromstring(line[2:], sep=" ")[:, None]  # [3, 1]
+                    v = v / max_norm
                     vNormString = "v %f %f %f\n" % (v[0], v[1], v[2])
                     fo.write(vNormString)
                 elif line.startswith("mtllib "):
