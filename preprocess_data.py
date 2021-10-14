@@ -42,22 +42,37 @@ def resize_objs(meshes_targets_and_specific_args, scale, work_path):
     pickle.dump({"max_norm": max_norm, "scale": scale}, open(os.path.join(work_path, "rescale.pkl"), "wb"))
     max_norm = max_norm * scale
     for i, (mesh_filepath, resize_mesh, _, _) in enumerate(meshes_targets_and_specific_args):
-        outmtl = os.path.splitext(resize_mesh)[0] + ".mtl"
+
         pickle.dump(bbox_centers[i], open(os.path.splitext(resize_mesh)[0] + ".pkl", "wb"))
 
-        with open(mesh_filepath, "r") as f, open(resize_mesh, "w") as fo:
-            for line in f:
-                if line.startswith("v "):
-                    v = np.fromstring(line[2:], sep=" ")[:, None]  # [3, 1]
-                    v = v - bbox_centers[i][:, None]
-                    v = v / max_norm
-                    vNormString = "v %f %f %f\n" % (v[0], v[1], v[2])
-                    fo.write(vNormString)
-                elif line.startswith("mtllib "):
-                    fo.write("mtllib " + os.path.basename(outmtl) + "\n")
-                else:
-                    fo.write(line)
-        shutil.copy2(os.path.splitext(mesh_filepath)[0] + ".mtl", outmtl)
+        if mesh_filepath[-4:] == ".ply":
+            mesh = as_mesh(trimesh.load(mesh_filepath, process=False))
+            mesh.vertices = mesh.vertices - bbox_centers[i][None]
+            mesh.vertices = mesh.vertices / max_norm
+            trimesh.exchange.export.export_mesh(mesh, resize_mesh, file_type="ply")
+        elif mesh_filepath[-4:] == ".obj":
+            try:
+                outmtl = os.path.splitext(resize_mesh)[0] + ".mtl"
+                with open(mesh_filepath, "r") as f, open(resize_mesh, "w") as fo:
+                    for line in f:
+                        if line.startswith("v "):
+                            v = np.fromstring(line[2:], sep=" ")[:, None]  # [3, 1]
+                            v = v - bbox_centers[i][:, None]
+                            v = v / max_norm
+                            vNormString = "v %f %f %f\n" % (v[0], v[1], v[2])
+                            fo.write(vNormString)
+                        elif line.startswith("mtllib "):
+                            fo.write("mtllib " + os.path.basename(outmtl) + "\n")
+                        else:
+                            fo.write(line)
+                shutil.copy2(os.path.splitext(mesh_filepath)[0] + ".mtl", outmtl)
+            except:
+                mesh = as_mesh(trimesh.load(mesh_filepath, process=False))
+                mesh.vertices = mesh.vertices - bbox_centers[i][None]
+                mesh.vertices = mesh.vertices / max_norm
+                trimesh.exchange.export.export_mesh(mesh, resize_mesh, file_type="obj")
+        else:
+            raise RuntimeError()
 
 
 def filter_classes_glob(patterns, classes):
