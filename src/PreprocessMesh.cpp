@@ -369,7 +369,7 @@ int main(int argc, char** argv) {
       pangolin::get<pangolin::Image<uint32_t>>(
           geom.objects.begin()->second.attributes["vertex_indices"]);
 
-  float max_dist = BoundingCubeNormalization(geom, true);
+  float max_dist = BoundingCubeNormalization(geom, false);
 
   if (vis)
     pangolin::CreateWindowAndBind("Main", 640, 480);

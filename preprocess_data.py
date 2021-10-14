@@ -31,20 +31,25 @@ def as_mesh(scene_or_mesh):
 
 def resize_objs(meshes_targets_and_specific_args, scale, work_path):
     max_norm = 0
+    bbox_centers = []
     for (mesh_filepath, _, _, _) in meshes_targets_and_specific_args:
         mesh = as_mesh(trimesh.load(mesh_filepath, process=False))
         verts = np.asfarray(mesh.vertices, dtype=np.float32)
-        norm = np.linalg.norm(np.max(verts, axis=0) - np.min(verts, axis=0))
+        bbox_center = (verts.min(0) + verts.max(0)) / 2
+        bbox_centers.append(bbox_center)
+        norm = np.linalg.norm(verts - bbox_center, axis=1).max()
         max_norm = max(max_norm, norm)
     pickle.dump({"max_norm": max_norm, "scale": scale}, open(os.path.join(work_path, "rescale.pkl"), "wb"))
-
     max_norm = max_norm * scale
-    for (mesh_filepath, resize_mesh, _, _) in meshes_targets_and_specific_args:
+    for i, (mesh_filepath, resize_mesh, _, _) in enumerate(meshes_targets_and_specific_args):
         outmtl = os.path.splitext(resize_mesh)[0] + ".mtl"
+        pickle.dump(bbox_centers[i], open(os.path.splitext(resize_mesh)[0] + ".pkl", "wb"))
+
         with open(mesh_filepath, "r") as f, open(resize_mesh, "w") as fo:
             for line in f:
                 if line.startswith("v "):
                     v = np.fromstring(line[2:], sep=" ")[:, None]  # [3, 1]
+                    v = v - bbox_centers[i][:, None]
                     v = v / max_norm
                     vNormString = "v %f %f %f\n" % (v[0], v[1], v[2])
                     fo.write(vNormString)

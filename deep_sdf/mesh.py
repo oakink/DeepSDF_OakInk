@@ -11,9 +11,7 @@ import torch
 import deep_sdf.utils
 
 
-def create_mesh(
-    decoder, latent_vec, filename, N=256, max_batch=32 ** 3, offset=None, scale=None
-):
+def create_mesh(decoder, latent_vec, filename, N=256, max_batch=32 ** 3, offset=None, scale=None):
     start = time.time()
     ply_filename = filename
 
@@ -48,10 +46,7 @@ def create_mesh(
         sample_subset = samples[head : min(head + max_batch, num_samples), 0:3].cuda()
 
         samples[head : min(head + max_batch, num_samples), 3] = (
-            deep_sdf.utils.decode_sdf(decoder, latent_vec, sample_subset)
-            .squeeze(1)
-            .detach()
-            .cpu()
+            deep_sdf.utils.decode_sdf(decoder, latent_vec, sample_subset).squeeze(1).detach().cpu()
         )
         head += max_batch
 
@@ -132,8 +127,4 @@ def convert_sdf_samples_to_ply(
     logging.debug("saving mesh to %s" % (ply_filename_out))
     ply_data.write(ply_filename_out)
 
-    logging.debug(
-        "converting to ply format and writing to file took {} s".format(
-            time.time() - start_time
-        )
-    )
+    logging.debug("converting to ply format and writing to file took {} s".format(time.time() - start_time))
