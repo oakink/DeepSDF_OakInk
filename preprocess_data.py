@@ -148,7 +148,7 @@ if __name__ == "__main__":
     arg_parser.add_argument(
         "--threads",
         dest="num_threads",
-        default=8,
+        default=16,
         help="The number of threads to use to process the data.",
     )
     arg_parser.add_argument("--scale", "-s", default=1.0, help="The max size scale of the category.")
