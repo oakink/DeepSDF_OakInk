@@ -17,23 +17,11 @@ import deep_sdf
 import deep_sdf.workspace as ws
 
 
-def as_mesh(scene_or_mesh):
-    if isinstance(scene_or_mesh, trimesh.Scene):
-        assert len(scene_or_mesh.geometry) != 0
-        mesh = trimesh.util.concatenate(
-            tuple(trimesh.Trimesh(vertices=g.vertices, faces=g.faces) for g in scene_or_mesh.geometry.values())
-        )
-    else:
-        assert isinstance(scene_or_mesh, trimesh.Trimesh)
-        mesh = scene_or_mesh
-    return mesh
-
-
 def resize_objs(meshes_targets_and_specific_args, scale, work_path):
     max_norm = 0
     bbox_centers = []
     for (mesh_filepath, _, _, _) in meshes_targets_and_specific_args:
-        mesh = as_mesh(trimesh.load(mesh_filepath, process=False))
+        mesh = trimesh.load(mesh_filepath, process=False, force="mesh")
         verts = np.asfarray(mesh.vertices, dtype=np.float32)
         bbox_center = (verts.min(0) + verts.max(0)) / 2
         bbox_centers.append(bbox_center)
@@ -46,7 +34,7 @@ def resize_objs(meshes_targets_and_specific_args, scale, work_path):
         pickle.dump(bbox_centers[i], open(os.path.splitext(resize_mesh)[0] + ".pkl", "wb"))
 
         if mesh_filepath[-4:] == ".ply":
-            mesh = as_mesh(trimesh.load(mesh_filepath, process=False))
+            mesh = trimesh.load(mesh_filepath, process=False, force="mesh")
             mesh.vertices = mesh.vertices - bbox_centers[i][None]
             mesh.vertices = mesh.vertices / max_norm
             trimesh.exchange.export.export_mesh(mesh, resize_mesh, file_type="ply")
@@ -67,7 +55,7 @@ def resize_objs(meshes_targets_and_specific_args, scale, work_path):
                             fo.write(line)
                 shutil.copy2(os.path.splitext(mesh_filepath)[0] + ".mtl", outmtl)
             except:
-                mesh = as_mesh(trimesh.load(mesh_filepath, process=False))
+                mesh = trimesh.load(mesh_filepath, process=False, force="mesh")
                 mesh.vertices = mesh.vertices - bbox_centers[i][None]
                 mesh.vertices = mesh.vertices / max_norm
                 trimesh.exchange.export.export_mesh(mesh, resize_mesh, file_type="obj")
