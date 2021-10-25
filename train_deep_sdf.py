@@ -342,6 +342,7 @@ def main_function(experiment_directory, continue_from, batch_split):
         shuffle=True,
         num_workers=num_data_loader_threads,
         drop_last=False,
+        persistent_workers=True,
     )
 
     logging.debug("torch num_threads: {}".format(torch.get_num_threads()))

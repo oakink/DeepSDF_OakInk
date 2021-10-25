@@ -4,6 +4,7 @@
 
 #include <assert.h>
 
+#include <cmath>
 #include <random>
 
 std::vector<Eigen::Vector3f> EquiDistPointsOnSphere(const uint numSamples,
@@ -211,8 +212,11 @@ float BoundingCubeNormalization(pangolin::Geometry& geom, bool fitToUnitSphere,
   const float yCenter = (yMax + yMin) / 2.0f;
   const float zCenter = (zMax + zMin) / 2.0f;
 
+  const float eps = 1e-6;
+
   // object should have centered
-  assert(xCenter == 0.0 && yCenter == 0.0 && zCenter == 0.0);
+  assert((std::abs(xCenter) < eps) && (std::abs(yCenter) < eps) &&
+         (std::abs(zCenter) < eps));
 
   // make the mean zero
   float maxDistance = -1.0f;

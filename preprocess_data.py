@@ -226,6 +226,8 @@ if __name__ == "__main__":
 
             processed_filepath = os.path.join(dest_dir, oid + extension)
 
+            assert not args.skip, "Skipping has a bug"
+
             if args.skip and os.path.isfile(processed_filepath):
                 logging.debug("skipping " + processed_filepath)
                 continue
