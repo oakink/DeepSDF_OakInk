@@ -117,6 +117,13 @@ if __name__ == "__main__":
         action="store_true",
         help="Skip meshes which have already been reconstructed.",
     )
+    arg_parser.add_argument(
+        "--mesh_include",
+        "-m",
+        action="store_true",
+        help="Reconstruct the meshes.",
+    )
+
     deep_sdf.add_common_args(arg_parser)
 
     args = arg_parser.parse_args()
@@ -159,7 +166,7 @@ if __name__ == "__main__":
 
     err_sum = 0.0
     repeat = 1
-    save_latvec_only = False
+    save_latvec_only = not args.mesh_include
     rerun = 0
 
     reconstruction_dir = os.path.join(args.experiment_directory, ws.reconstructions_subdir)
