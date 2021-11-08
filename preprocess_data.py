@@ -168,6 +168,7 @@ if __name__ == "__main__":
         help="If set, the script will produce mesh surface samples for evaluation. "
         + "Otherwise, the script will produce SDF samples for training.",
     )
+    arg_parser.add_argument("--downsample", action="store_true")
 
     deep_sdf.add_common_args(arg_parser)
 
@@ -222,7 +223,12 @@ if __name__ == "__main__":
 
             obj_name = real_meta[oid]["name"] if is_real else virtual_meta[oid]["name"]
 
-            shape_dir = os.path.join("./data", "yodaObjects" if is_real else "yodaVirtualObjects", obj_name, "align")
+            shape_dir = os.path.join(
+                "./data",
+                "yodaObjects" if is_real else "yodaVirtualObjects",
+                obj_name,
+                "align_ds" if args.downsample else "align",
+            )
 
             processed_filepath = os.path.join(dest_dir, oid + extension)
 
