@@ -12,23 +12,32 @@ import subprocess
 
 import numpy as np
 import trimesh
+from tqdm import tqdm
 
 import deep_sdf
 import deep_sdf.workspace as ws
 
 
-def resize_objs(meshes_targets_and_specific_args, scale, work_path):
+def resize_objs(meshes_targets_and_specific_args, scale, work_path, is_skip):
     max_norm = 0
     bbox_centers = []
-    for (mesh_filepath, _, _, _) in meshes_targets_and_specific_args:
+    for (mesh_filepath, _, _, _) in tqdm(meshes_targets_and_specific_args):
         mesh = trimesh.load(mesh_filepath, process=False, force="mesh")
         verts = np.asfarray(mesh.vertices, dtype=np.float32)
         bbox_center = (verts.min(0) + verts.max(0)) / 2
         bbox_centers.append(bbox_center)
         norm = np.linalg.norm(verts - bbox_center, axis=1).max()
         max_norm = max(max_norm, norm)
-    pickle.dump({"max_norm": max_norm, "scale": scale}, open(os.path.join(work_path, "rescale.pkl"), "wb"))
-    max_norm = max_norm * scale
+
+    if not is_skip:
+        pickle.dump({"max_norm": max_norm, "scale": scale}, open(os.path.join(work_path, "rescale.pkl"), "wb"))
+        max_norm = max_norm * scale
+    else:
+        rescale = pickle.load(open(os.path.join(work_path, "rescale.pkl"), "rb"))
+        max_norm = rescale["max_norm"] * rescale["scale"]
+        scale = rescale["scale"]
+        print("use max_norm: " + str(max_norm))
+
     for i, (mesh_filepath, resize_mesh, _, _) in enumerate(meshes_targets_and_specific_args):
 
         pickle.dump(bbox_centers[i], open(os.path.splitext(resize_mesh)[0] + ".pkl", "wb"))
@@ -232,14 +241,20 @@ if __name__ == "__main__":
 
             processed_filepath = os.path.join(dest_dir, oid + extension)
 
-            assert not args.skip, "Skipping has a bug"
+            # assert not args.skip, "Skipping has a bug"
 
             if args.skip and os.path.isfile(processed_filepath):
-                logging.debug("skipping " + processed_filepath)
+                logging.info("skipping " + processed_filepath)
                 continue
 
             try:
                 mesh_filename = deep_sdf.data.find_mesh_in_directory(shape_dir)
+
+                mesh_tmp = trimesh.load(mesh_filename, process=False, force="mesh")
+                # handle edge cases
+                if not args.downsample and mesh_tmp.faces.shape[0] > 80000:
+                    shape_dir = shape_dir.replace("align", "align_ds")
+                    mesh_filename = deep_sdf.data.find_mesh_in_directory(shape_dir)
 
                 specific_args = []
 
@@ -272,7 +287,7 @@ if __name__ == "__main__":
                 logging.warning("Multiple meshes found for instance " + shape_dir)
 
     print(meshes_targets_and_specific_args)
-    resize_objs(meshes_targets_and_specific_args, scale=args.scale, work_path=args.data_dir)
+    resize_objs(meshes_targets_and_specific_args, scale=args.scale, work_path=args.data_dir, is_skip=args.skip)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=int(args.num_threads)) as executor:
 

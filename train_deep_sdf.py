@@ -156,6 +156,16 @@ def load_latent_vectors(experiment_directory, filename, lat_vecs):
             lat_vecs.weight.data[i, :] = lat_vec
 
     else:
+        if lat_vecs.weight.shape[0] > data["latent_codes"]["weight"].shape[0]:
+            bias = (
+                torch.rand(
+                    (lat_vecs.weight.shape[0] - data["latent_codes"]["weight"].shape[0], lat_vecs.weight.shape[1]),
+                    dtype=torch.float32,
+                )
+                / 10.0
+                - 0.05
+            )
+            data["latent_codes"]["weight"] = torch.cat((data["latent_codes"]["weight"], bias), dim=0)
         lat_vecs.load_state_dict(data["latent_codes"])
 
     return data["epoch"]
@@ -237,7 +247,7 @@ def append_parameter_magnitudes(param_mag_log, model):
         param_mag_log[name].append(param.data.norm().item())
 
 
-def main_function(experiment_directory, continue_from, batch_split):
+def main_function(experiment_directory, continue_from, batch_split, load_ckp, load_ckp_epoch):
 
     logging.debug("running " + experiment_directory)
 
@@ -411,6 +421,12 @@ def main_function(experiment_directory, continue_from, batch_split):
 
         logging.debug("loaded")
 
+    if load_ckp is not None:
+        lat_epoch = load_latent_vectors(load_ckp, load_ckp_epoch + ".pth", lat_vecs)
+        model_epoch = ws.load_model_parameters(load_ckp, load_ckp_epoch, decoder)
+        assert lat_epoch == model_epoch
+        logging.info("loaded checkpoint {} - {}".format(load_ckp, load_ckp_epoch))
+
     logging.info("starting from epoch {}".format(start_epoch))
 
     logging.info("Number of decoder parameters: {}".format(sum(p.data.nelement() for p in decoder.parameters())))
@@ -553,10 +569,15 @@ if __name__ == "__main__":
         + "sizes in memory constrained environments.",
     )
 
+    arg_parser.add_argument("--load_ckp", default=None)
+    arg_parser.add_argument("--load_ckp_epoch", default="latest")
+
     deep_sdf.add_common_args(arg_parser)
 
     args = arg_parser.parse_args()
 
     deep_sdf.configure_logging(args)
 
-    main_function(args.experiment_directory, args.continue_from, int(args.batch_split))
+    main_function(
+        args.experiment_directory, args.continue_from, int(args.batch_split), args.load_ckp, args.load_ckp_epoch
+    )
