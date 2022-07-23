@@ -177,7 +177,7 @@ if __name__ == "__main__":
         help="If set, the script will produce mesh surface samples for evaluation. "
         + "Otherwise, the script will produce SDF samples for training.",
     )
-    arg_parser.add_argument("--downsample", action="store_true")
+    arg_parser.add_argument("--downsample", action="store_false")
 
     deep_sdf.add_common_args(arg_parser)
 
@@ -234,7 +234,7 @@ if __name__ == "__main__":
 
             shape_dir = os.path.join(
                 "./data",
-                "yodaObjects" if is_real else "yodaVirtualObjects",
+                "OakInkObjects" if is_real else "OakInkVirtualObjects",
                 obj_name,
                 "align_ds" if args.downsample else "align",
             )
@@ -250,11 +250,6 @@ if __name__ == "__main__":
             try:
                 mesh_filename = deep_sdf.data.find_mesh_in_directory(shape_dir)
 
-                mesh_tmp = trimesh.load(mesh_filename, process=False, force="mesh")
-                # handle edge cases
-                if not args.downsample and mesh_tmp.faces.shape[0] > 80000:
-                    shape_dir = shape_dir.replace("align", "align_ds")
-                    mesh_filename = deep_sdf.data.find_mesh_in_directory(shape_dir)
 
                 specific_args = []
 

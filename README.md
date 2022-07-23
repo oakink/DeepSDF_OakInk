@@ -63,11 +63,6 @@ Each DeepSDF experiment is organized in an "experiment directory", which collect
                 <MeshId>.pth
             Meshes/
                 <MeshId>.pth
-    Evaluations/
-        Chamfer/
-            <Epoch>.json
-        EarthMoversDistance/
-            <Epoch>.json
 ```
 
 The only file that is required to begin an experiment is 'specs.json', which sets the parameters, network architecture, and data to be used for the experiment.
@@ -105,91 +100,6 @@ The preprocessing script requires an OpenGL context, and to acquire one it will 
 
 ```
 export PANGOLIN_WINDOW_URI=headless://
-```
-
-### Training a Model
-
-Once data has been preprocessed, models can be trained using:
-
-```
-python train_deep_sdf.py -e <experiment_directory>
-```
-
-Parameters of training are stored in a "specification file" in the experiment directory, which (1) avoids proliferation of command line arguments and (2) allows for easy reproducibility. This specification file includes a reference to the data directory and a split file specifying which subset of the data to use for training.
-
-##### Visualizing Progress
-
-All intermediate results from training are stored in the experiment directory. To visualize the progress of a model during training, run:
-
-```
-python plot_log.py -e <experiment_directory>
-```
-
-By default, this will plot the loss but other values can be shown using the `--type` flag.
-
-##### Continuing from a Saved Optimization State
-
-If training is interrupted, pass the `--continue` flag along with a epoch index to `train_deep_sdf.py` to continue from the saved state at that epoch. Note that the saved state needs to be present --- to check which checkpoints are available for a given experiment, check the `ModelParameters', 'OptimizerParameters', and 'LatentCodes' directories (all three are needed).
-
-### Reconstructing Meshes
-
-To use a trained model to reconstruct explicit mesh representations of shapes from the test set, run:
-
-```
-python reconstruct.py -e <experiment_directory>
-```
-
-This will use the latest model parameters to reconstruct all the meshes in the split. To specify a particular checkpoint to use for reconstruction, use the ```--checkpoint``` flag followed by the epoch number. Generally, test SDF sampling strategy and regularization could affect the quality of the test reconstructions. For example, sampling aggressively near the surface could provide accurate surface details but might leave under-sampled space unconstrained, and using high L2 regularization coefficient could result in perceptually better but quantitatively worse test reconstructions.
-
-### Shape Completion
-
-The current release does not include code for shape completion. Please check back later!
-
-### Evaluating Reconstructions
-
-Before evaluating a DeepSDF model, a second mesh preprocessing step is required to produce a set of points sampled from the surface of the test meshes. This can be done as with the sdf samples, but passing the `--surface` flag to the pre-processing script. Once this is done, evaluations are done using:
-
-```
-python evaluate.py -e <experiment_directory> -d <data_directory> --split <split_filename>
-```
-
-##### Note on Table 3 from the CVPR '19 Paper
-
-Given the stochastic nature of shape reconstruction (shapes are reconstructed via gradient descent with a random initialization), reconstruction accuracy will vary across multiple reruns of the same shape. The metrics listed in Table 3 for the "chair" and "plane" are the result of performing two reconstructions of each shape and keeping the one with the lowest chamfer distance. The code as released does not support this evaluation and thus the reproduced results will likely differ from those produced in the paper. For example, our test run with the provided code produced Chamfer distance (multiplied by 10<sup>3</sup>) mean and median of 0.157 and 0.062 respectively for the "chair" class and 0.101 and 0.044 for the "plane" class (compared to 0.204, 0.072 for chairs and 0.143, 0.036 for planes reported in the paper). 
-
-
-## Examples
-
-Here's a list of commands for a typical use case of training and evaluating a DeepSDF model using the "sofa" class of the ShapeNet version 2 dataset. 
-
-```
-# navigate to the DeepSdf root directory
-cd [...]/DeepSdf
-
-# create a home for the data
-mkdir data
-
-# pre-process the sofas training set (SDF samples)
-
-export MESA_GL_VERSION_OVERRIDE=3.3
-export PANGOLIN_WINDOW_URI=headless://
-
-python preprocess_data.py --data_dir data/sdf/mug --skip --threads 16
-
-# train the model
-python train_deep_sdf.py -e data/sdf/mug
-
-# pre-process the sofa test set (SDF samples)
-python preprocess_data.py --data_dir data --source [...]/ShapeNetCore.v2/ --name ShapeNetV2 --split examples/splits/sv2_sofas_test.json --test --skip
-
-# pre-process the sofa test set (surface samples)
-python preprocess_data.py --data_dir data --source [...]/ShapeNetCore.v2/ --name ShapeNetV2 --split examples/splits/sv2_sofas_test.json --surface --skip
-
-# reconstruct meshes from the sofa test split (after 2000 epochs)
-python reconstruct.py -e examples/sofas -c 2000 --split examples/splits/sv2_sofas_test.json -d data --skip
-
-# evaluate the reconstructions
-python evaluate.py -e examples/sofas -c 2000 -d data -s examples/splits/sv2_sofas_test.json 
 ```
 
 ## Team
